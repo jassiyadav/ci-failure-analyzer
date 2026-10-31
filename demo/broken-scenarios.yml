@@ -1,0 +1,45 @@
+# Copy into the repo you want to monitor as .github/workflows/broken-scenarios.yml
+# Actions tab -> "Broken CI (demo)" -> Run workflow -> pick a scenario.
+# Each run fails on purpose, so you can build your labelled eval set quickly.
+name: Broken CI (demo)
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Failure to simulate
+        type: choice
+        options: [missing-dependency, failing-test, missing-env, bad-docker-copy, lint-error]
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependency
+        if: inputs.scenario == 'missing-dependency'
+        run: pip install this-package-does-not-exist-xyz
+
+      - name: Run tests
+        if: inputs.scenario == 'failing-test'
+        run: python -c "assert 1 + 1 == 3, 'math is broken'"
+
+      - name: Load config
+        if: inputs.scenario == 'missing-env'
+        run: python -c "import os; print(os.environ['DATABASE_URL'])"
+
+      - name: Build image
+        if: inputs.scenario == 'bad-docker-copy'
+        run: |
+          printf 'FROM alpine:3.20\nCOPY does-not-exist.txt /app/\n' > Dockerfile.broken
+          docker build -f Dockerfile.broken .
+
+      - name: Lint
+        if: inputs.scenario == 'lint-error'
+        run: |
+          pip install ruff
+          printf 'import os\n' > bad.py
+          ruff check bad.py
